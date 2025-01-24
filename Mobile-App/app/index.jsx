@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   Text,
   View,
@@ -7,36 +8,74 @@ import {
   FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState } from "react";
-import { data } from "@/data/todos";
-
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
+// Firebase imports
+import { db } from "../data/firebase"; // import the db from your firebase.js
+import {
+  collection,
+  query,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
+
 export default function Index() {
-  const [todos, setTodos] = useState(data.sort((a, b) => b.id - a.id));
+  const [todos, setTodos] = useState([]);
   const [text, setText] = useState("");
 
+  useEffect(() => {
+    const q = query(collection(db, "todos"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const todosFromDB = [];
+      querySnapshot.forEach((docItem) => {
+        todosFromDB.push({ id: docItem.id, ...docItem.data() });
+      });
+
+      todosFromDB.sort((a, b) => b.createdAt - a.createdAt);
+
+      setTodos(todosFromDB);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Create
-  const addTodo = () => {
+  const addTodo = async () => {
     if (text.trim()) {
-      const newId = todos.length > 0 ? todos[0].id + 1 : 1;
-      setTodos([{ id: newId, title: text, completed: false }, ...todos]);
-      setText("");
+      try {
+        await addDoc(collection(db, "todos"), {
+          title: text,
+          completed: false,
+          createdAt: Date.now(),
+        });
+        setText("");
+      } catch (error) {
+        console.log("Error adding doc: ", error);
+      }
     }
   };
 
   // Update
-  const toggelTodo = (id) => {
-    setTodos(
-      todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      )
-    );
+  const toggleTodo = async (id, currentCompleted) => {
+    try {
+      const docRef = doc(db, "todos", id);
+      await updateDoc(docRef, { completed: !currentCompleted });
+    } catch (error) {
+      console.log("Error updating doc: ", error);
+    }
   };
 
   // Delete
-  const removeTodo = (id) => {
-    setTodos(todos.filter((todo) => todo.id !== id));
+  const removeTodo = async (id) => {
+    try {
+      const docRef = doc(db, "todos", id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.log("Error deleting doc: ", error);
+    }
   };
 
   // Render
@@ -44,17 +83,12 @@ export default function Index() {
     <View style={styles.todoItem}>
       <Text
         style={[styles.todoText, item.completed && styles.completedText]}
-        onPress={() => toggelTodo(item.id)}
+        onPress={() => toggleTodo(item.id, item.completed)}
       >
         {item.title}
       </Text>
       <Pressable onPress={() => removeTodo(item.id)}>
-        <MaterialCommunityIcons
-          name="delete-circle"
-          size={36}
-          color="red"
-          selectable={undefined}
-        />
+        <MaterialCommunityIcons name="delete-circle" size={36} color="red" />
       </Pressable>
     </View>
   );
@@ -76,8 +110,7 @@ export default function Index() {
       <FlatList
         data={todos}
         renderItem={renderItem}
-        keyExtractor={(todo) => todo.id}
-        contentContainerStyle={{ flexGrow: 1 }}
+        keyExtractor={(item) => item.id}
       />
     </SafeAreaView>
   );
@@ -96,7 +129,6 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1024,
     marginHorizontal: "auto",
-    pointerEvents: "auto",
   },
   input: {
     flex: 1,
@@ -129,9 +161,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1024,
     marginHorizontal: "auto",
-    pointerEvents: "auto",
   },
-
   todoText: {
     flex: 1,
     fontSize: 18,
