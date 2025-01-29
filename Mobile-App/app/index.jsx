@@ -11,7 +11,36 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 // Firebase imports
+import { db } from "../data/firebase"; // import the db from your firebase.js
+import {
+  collection,
+  query,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
 
+export default function Index() {
+  const [todos, setTodos] = useState([]);
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    const q = query(collection(db, "todos"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const todosFromDB = [];
+      querySnapshot.forEach((docItem) => {
+        todosFromDB.push({ id: docItem.id, ...docItem.data() });
+      });
+
+      todosFromDB.sort((a, b) => b.createdAt - a.createdAt);
+
+      setTodos(todosFromDB);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Create
   const addTodo = async () => {
